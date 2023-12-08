@@ -1,0 +1,238 @@
+---
+title: "Phylogenetic Analysis of Arbuscular Mycorrhizal Fungi"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(tidy=TRUE)
+```
+
+## Introduction
+
+The phylogenetic tree for this analysis was retrieved from the study of arbuscular mycorrhizal (AM) fungi by [Montoliu-Nerin M. et al. (2021)](https://www.frontiersin.org/articles/10.3389/ffunb.2021.716385/full). 
+
+The focus on mycorrhizal fungi is crucial due to their unique symbiotic relationship with plants, leading to unpredictable diversification rates. The non-ultrametric phylogenetic tree exhibited a phylogenetic diversity of 19.61 and an imbalance index of 0.61. To enhance analysis, the tree was rooted with the midpoint and transformed into an ultrametric tree assuming a molecular clock. The comparison of branch lengths before and after transformation highlighted the proportional representation of time in the ultrametric tree. The imbalance index was calculated for the rooted tree, revealing its structural characteristics.
+
+Additionally, unique evolutionary history was assessed by quantifying the total branch length for each tip, resulting in a bar plot showcasing the contributions of individual tips to the overall diversity. As a result, *Pustriiformis sp tritici* displayed the largest contribution to phylogenetic diversity. Next, the impact of extinction events on phylogenetic diversity was simulated, demonstrating a decline in diversity with increasing extinction percentages. Furthermore, tip diversification rate was calculated for each species, which showed distinct differences in the diversification rates among taxa. The results were mapped onto the phylogenetic tree, providing insights into the evolutionary patterns of AM fungi. Overall, these analyses contribute to a comprehensive understanding of the diversification and evolutionary dynamics within the AM fungal kingdom.
+
+```{r, echo=FALSE}
+library(ape)
+library(phytools)
+library(ggplot2)
+```
+
+```{r metrics, echo=TRUE, results='asis', tidy=TRUE}
+
+fungi <- read.tree(text="('Ac_colombiana':0.195967,((((((('Lo_transversale':0.248382,'M_oelongata':0.242798):0.746558,((('Endogone_sp':0.252294,('J_flammicorona':0.032425,'J_lactiflua':0.068257):0.26778):0.414486,(('Abrepens':0.338866,'H_vesiculosa':0.516756):0.224159,((('Sy_racemosum':0.450269,'Li_corymbifera':0.356784):0.126849,('Sa_vasiformis':0.378248,'Ph_blakesleeanus':0.461003):0.060554):0.046023,(('Rhizopu_microsporus_var_chinensis':0.024596,'Rhizopu_microsporus_var_microsporus':0.022252):0.359237,'Mu_circinelloides':0.296146):0.228733):0.049632):0.378675):0.162282,(('Sch_pombe':1.164115,('Y_lipolytica':1.34397,'T_melanosporum':0.902927):0.126234):0.266949,('La_bicolor':0.910175,('Pu_striiformis_sp_tritici':1.105852,'U_maydis':0.935613):0.160698):0.396668):0.236867):0.056793):0.341705,(('Am_gerdemannii':0.098396,'Am_leptoticha':0.096903):0.43672,('Pa_brasilianum':0.062884,'Pa_ocultum':0.070512):0.59586):0.065987):0.125241,('Cl_claroideum':0.014438,('Cl_candidum_NC172':0.006565,'Cl_candidum_B6_9Kansas':0.005578):0.009075):0.575538):0.053342,(('F_mosseae':0.006695,'F_caledonius':0.006499):0.177547,('Rhizoph_cerebriforme':0.090787,('Rhizoph_diaphanus':0.013038,('Rhizoph_irregularis_A1':0.001402,'Rhizoph_irregularis_DAOM197198':0.006213):0.008612):0.106338):0.08):0.230293):0.087132,('Scu_calospora':0.138114,((('Scu_pellucida':0.025318,'Ce_pellucida':0.018387):0.045192,('Ra_persica':0.024012,'Ra_fulgida':0.031254):0.040198):0.053731,(('De_erythropa':0.03084,'De_heterogama':0.028311):0.037587,('G_margarita':0.028394,('G_rosea_FL105':0.005933,'G_rosea_DAOM194757':0.005333):0.020759):0.052717):0.040901):0.047286):0.2483):0.111271,('Di_eburnea':0.056785,'Di_epigaea':0.036294):0.26671):0.146423,'Ac_morrowiae':0.144935);")
+
+```
+
+## The tree
+The tree appears to be unrooted. Before continuing with the analysis we need to make sure that it is fully dichotomous and root it with **midpoint_root()**.
+
+```{r, echo=TRUE}
+## Check for bifurcating and ultrametric propoerties
+is.ultrametric(fungi)
+is.binary(fungi)
+
+## Root with midpoint
+fungi_rooted <- midpoint_root(fungi)
+
+## Plot the tree 
+
+par(mar = c(2, 2, 2, 2))  
+par(oma = c(0, 0, 0, 0))  
+
+plot(fungi_rooted)
+```
+
+# Phylogenentic diversity:
+The tree appears to be non-ultrametric, here the branch length represents genetic difference between the taxa. Therefore, the phylogenetic diversity could be estimated by summing the branch lengths in the phylogenetic tree. However, I will also convert the tree to ultrametric with an assumption that the tree follows molecular clock and calculate phylogenetic diversity for it too.
+```{r, echo=TRUE, tidy=FALSE}
+## Let's see the lengths of the branches in the original tree.
+fungi_rooted$edge.length
+
+## Now convert the tree to ultrametric and see how the branch lengths change.
+## Now the lengths are proportionate to time.
+ult_fungi <- chronos(fungi_rooted)
+ult_fungi$edge.length
+#plot(ult_fungi)
+
+```
+
+```{r, echo=TRUE}
+# The phylogenetic diversity for ultrametric and non-ultrametric trees
+sum(fungi_rooted$edge.length)
+sum(ult_fungi$edge.length)
+```
+
+# Imbalance:
+The tree balance could be estimated for rooted and fully dichotomous tree:
+
+```{r}
+fungi_balance <- balance(fungi_rooted)
+```
+Each row in a table represents an internal node, and each column is a number of leaves per side of the node. To calculate the imbalance index per node, we divide the number of brunches in the **max** side by the total number of brunches per node. For this purpose,  I will apply lambda function:
+```{r, echo=TRUE}
+## I take margin 1 to apply function to each row, 
+## the function is calculating the proportion that the branches of the largest side take per node.
+imbalance_index <- mean(apply(fungi_balance, 1, function(row) max(row) / sum(row)))
+print(imbalance_index)
+```
+
+```{r, echo=FALSE}
+## Alternative way is to use a loop to calculate the mean, but I wanted to use a one-line approach 
+imbalance_index = 0 
+for (i in (1:nrow(fungi_balance))) {
+  imbalance_index <- imbalance_index + max(fungi_balance[i,1], fungi_balance[i,2])/sum(fungi_balance[i,])
+}
+imbalance_index <- imbalance_index/nrow(fungi_balance)
+
+```
+# Unique evolutionary history
+```{r, echo=TRUE}
+
+# Calculate the unique evolutionary history for each tip
+tip_lengths <- sapply(fungi_rooted$tip.label, function(tip) sum(fungi_rooted$edge.length[fungi_rooted$tip.label == tip]))
+
+# Create a data frame for easier plotting
+tip_data <- data.frame(Tip = fungi_rooted$tip.label, Length = tip_lengths)
+
+# Sort the data frame by the length in descending order
+tip_data <- tip_data[order(-tip_data$Length), ]
+
+barplot(tip_data$Length, names.arg = tip_data$Tip, las = 2, col = "darkgreen",
+        main = "Unique Evolutionary History by Tip",
+        xlab = "Tips", ylab = "Total Branch Length")
+
+```
+# Phylogenetic diversity with extinction
+The phylogenetic diversity is estimated with the branch length in the non-ultrametric tree:
+
+```{r, echo=TRUE}
+# Create a function to simulate tip extinction and calculate phylogenetic diversity
+simulate_extinction <- function(phylo, extinction_percentage) {
+  
+  # For simulation, I would be choosing the random species to extinct 10 times and 
+  # then average the result within these 10 random extinction models to yield a phylogenetic 
+  # diversity for a particular extinction percentage.
+
+  diversity = 0
+  for(i in (1:10)){
+    extinct_species <- sample(phylo$tip.label, size = round(extinction_percentage * length(phylo$tip.label)))
+    tree <- phylo
+    tree_trim <- drop.tip(tree, extinct_species)
+    diversity <- diversity + sum(tree_trim$edge.length)
+  }
+  # Get an average phylogenetic diversity per extinction coefficient 
+  diversity = diversity/10
+  return(diversity)
+}
+
+# Let's see how the function works for the 10% extinction
+simulate_extinction(fungi, 0.1)
+
+
+
+# Then I set the vector of extinction percentages from 0 to 90%
+extinction_percentages <- seq(0, 0.9, by = 0.05)
+
+# I apply the simulation funciton to the tree with every extinction coefficient in the vector
+diversity_values <- sapply(extinction_percentages, function(percentage) simulate_extinction(fungi, percentage))
+
+# Plot the decline in total phylogenetic diversity
+plot(extinction_percentages * 100, diversity_values,
+     xlab = "Percentage of Extinction",
+     ylab = "Total Phylogenetic Diversity",
+     main = "Impact of extinction on phylogenetic diversity")
+
+```
+
+# Diversification rate among the lineages
+Next, the diversification rate was calculated through the novel function **count_nodes_and_branches** that estimated the average ratio of the node number to the branch lengths for specific tip:
+```{r, echo=TRUE}
+count_nodes_and_branches <- function(tree, tip_label) {
+  # Find the index of a tip that corresponds to a species, the species name must be printed with the "''"
+  tip_index <- which(tree$tip.label == tip_label)
+  root_index <- length(tree$tip.label) + 1
+
+  # We will be counting nodes, branches, and the branch sequence number 
+  # Here we already count the first branch from the tip to its first node
+  num_nodes <- 1
+  num_branches <- 1
+  branches_to_tip <- c(which(tree$edge[,2]==tip_index))
+  current_branch <- which(tree$edge[,2] == tip_index)
+  
+  #Change the tip to the next node
+  tip_index = tree$edge[current_branch,1]
+  
+  
+  
+
+  # Now we will be descending from the tip of the species down to the root, 
+  # counting the number of nodes and the length of the branches
+  while (tree$edge[current_branch, 1] != root_index) {
+    # Traverse from descendant to ancestor
+    branches_to_tip <- append(branches_to_tip, current_branch)
+    tip_index <- tree$edge[current_branch, 1]
+    current_branch <- which(tree$edge[, 2] == tip_index)
+    num_nodes <- num_nodes + 1
+    num_branches <- num_branches + 1
+  }
+  
+  # Calculate the length of the branches
+  branch_length <- sum(tree$edge.length[branches_to_tip])
+  
+  # Calculate the diversification rate as nodes divided by time
+  diversification_rate <- num_nodes / branch_length
+  
+  return(diversification_rate)
+}
+
+# Example for the first branch
+result <- count_nodes_and_branches(fungi_rooted, "'Ac_colombiana'")
+print(result)
+
+# Count diversification rate for all the tips and construct a dataframe:
+diversification_data <- data.frame(TipLabel = character(0), DiversificationRate = numeric(0))
+
+# Loop through each tip in the tree and calculate diversification rate
+for (tip_label in fungi_rooted$tip.label) {
+  diversification_rate <- count_nodes_and_branches(fungi_rooted, tip_label)
+  diversification_data <- rbind(diversification_data, data.frame(TipLabel = tip_label, DiversificationRate = diversification_rate))
+}
+
+# Print the data frame
+print(diversification_data)
+
+
+```
+
+Now let's count the diversification rate for all the tips and plot the diversification rate with a binary character, where the rate below median would be 0 and above median 1:
+```{r}
+# Reclassify diversification rate as a binary character (e.g., above/below median)
+median <- median(diversification_data$DiversificationRate)
+diversification_data$BinaryDiversification <- ifelse(diversification_data$DiversificationRate > median, 1, 0)
+print(diversification_data)
+
+
+# Map binary diversification onto the tree using ace
+fungi_ace <- ace(diversification_data$BinaryDiversification, fungi_rooted, type = "discrete")
+
+
+
+# Plot the tree with diversification rate mapped onto it
+# Adjust margins
+par(mar = c(2, 2, 2, 2))  # Set inner margins
+par(oma = c(0, 0, 0, 0))  # Set outer margins
+
+
+plot(fungi_rooted, type = "phylogram",label.offset=0.02)
+ cols <- c("blue", "yellow")
+ tiplabels(pch = 22, bg = cols[diversification_data$BinaryDiversification+1], cex = 2)
+ nodelabels(thermo = fungi_ace$lik.anc, piecol = cols, cex = 0.75)
+ axisPhylo()
+```
